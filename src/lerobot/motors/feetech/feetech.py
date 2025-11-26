@@ -162,7 +162,12 @@ class FeetechMotorsBus(MotorsBus):
                 "Update their firmware first using Feetech's software. "
                 "Visit https://www.feetechrc.com/software."
             )
-
+            # logger.warning(
+            #     "Some Motors use different firmware versions:"
+            #     f"\n{pformat(firmware_versions)}\n"
+            #     "Update their firmware first using Feetech's software. "
+            #     "Visit https://www.feetechrc.com/software."
+            # )
     def _handshake(self) -> None:
         self._assert_motors_exist()
         self._assert_same_firmware()

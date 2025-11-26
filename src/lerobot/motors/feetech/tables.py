@@ -179,6 +179,7 @@ MODEL_CONTROL_TABLE = {
     "sms_series": STS_SMS_SERIES_CONTROL_TABLE,
     "sts3215": STS_SMS_SERIES_CONTROL_TABLE,
     "sts3250": STS_SMS_SERIES_CONTROL_TABLE,
+    "sts3032": STS_SMS_SERIES_CONTROL_TABLE,
     "scs0009": SCS_SERIES_CONTROL_TABLE,
     "sm8512bl": STS_SMS_SERIES_CONTROL_TABLE,
 }
@@ -188,6 +189,7 @@ MODEL_RESOLUTION = {
     "sms_series": 4096,
     "scs_series": 1024,
     "sts3215": 4096,
+    "sts3032": 4096,
     "sts3250": 4096,
     "sm8512bl": 4096,
     "scs0009": 1024,
@@ -200,6 +202,7 @@ MODEL_BAUDRATE_TABLE = {
     "sm8512bl": STS_SMS_SERIES_BAUDRATE_TABLE,
     "sts3215": STS_SMS_SERIES_BAUDRATE_TABLE,
     "sts3250": STS_SMS_SERIES_BAUDRATE_TABLE,
+    "sts3032": STS_SMS_SERIES_BAUDRATE_TABLE,
     "scs0009": SCS_SERIES_BAUDRATE_TABLE,
 }
 
@@ -235,6 +238,7 @@ SCAN_BAUDRATES = [
 ]
 
 MODEL_NUMBER_TABLE = {
+    "sts3032": 521,
     "sts3215": 777,
     "sts3250": 2825,
     "sm8512bl": 11272,
@@ -245,6 +249,7 @@ MODEL_PROTOCOL = {
     "sts_series": 0,
     "sms_series": 0,
     "scs_series": 1,
+    "sts3032": 0,
     "sts3215": 0,
     "sts3250": 0,
     "sm8512bl": 0,

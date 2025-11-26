@@ -56,6 +56,13 @@ import time
 from dataclasses import asdict, dataclass
 from pprint import pformat
 
+
+# Add these imports for keyboard input
+import select
+import sys
+import termios
+import tty
+
 import rerun as rr
 
 from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig  # noqa: F401
@@ -76,6 +83,7 @@ from lerobot.robots import (  # noqa: F401
     make_robot_from_config,
     so100_follower,
     so101_follower,
+    parallel3
 )
 from lerobot.teleoperators import (  # noqa: F401
     Teleoperator,
@@ -87,6 +95,7 @@ from lerobot.teleoperators import (  # noqa: F401
     make_teleoperator_from_config,
     so100_leader,
     so101_leader,
+    parallel3_kb
 )
 from lerobot.utils.import_utils import register_third_party_devices
 from lerobot.utils.robot_utils import busy_wait
@@ -132,53 +141,95 @@ def teleop_loop(
         robot_observation_processor: An optional pipeline to process raw observations from the robot.
     """
 
-    display_len = max(len(key) for key in robot.action_features)
-    start = time.perf_counter()
+    # Store terminal settings
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
 
-    while True:
-        loop_start = time.perf_counter()
+    try:
+        # Set terminal to raw mode
+        tty.setraw(sys.stdin.fileno())
 
-        # Get robot observation
-        # Not really needed for now other than for visualization
-        # teleop_action_processor can take None as an observation
-        # given that it is the identity processor as default
-        obs = robot.get_observation()
+        display_len = max(len(key) for key in robot.action_features)
+        start = time.perf_counter()
 
-        # Get teleop action
-        raw_action = teleop.get_action()
+        # Initialize target positions with current robot positions
+        current_obs = robot.get_observation()
+        robot_action_to_send = {k: v for k, v in current_obs.items() if k.endswith(".pos")}
 
-        # Process teleop action through pipeline
-        teleop_action = teleop_action_processor((raw_action, obs))
+        print(
+            """
+Starting keyboard teleoperation. Press keys to control the robot.
+Controls:
+- 1/q: shoulder_pan
+- 2/w: shoulder_lift
+- 3/e: elbow_flex
+- x: Exit
+"""
+        )
 
-        # Process action for robot through pipeline
-        robot_action_to_send = robot_action_processor((teleop_action, obs))
+        while True:
+            loop_start = time.perf_counter()
 
-        # Send processed action to robot (robot_action_processor.to_output should return dict[str, Any])
-        _ = robot.send_action(robot_action_to_send)
+            # Check for keyboard input (non-blocking)
+            key = None
+            if select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
+                key = sys.stdin.read(1)
 
-        if display_data:
-            # Process robot observation through pipeline
-            obs_transition = robot_observation_processor(obs)
+            if key == "x":
+                print("Exit key pressed. Stopping teleoperation.")
+                break
 
-            log_rerun_data(
-                observation=obs_transition,
-                action=teleop_action,
-            )
+            # Define key mappings and increments
+            angle_increment = 1.0  # degrees
+            key_map = {
+                "1": ("shoulder_pan.pos", -angle_increment),
+                "q": ("shoulder_pan.pos", angle_increment),
+                "2": ("shoulder_lift.pos", -angle_increment),
+                "w": ("shoulder_lift.pos", angle_increment),
+                "3": ("elbow_flex.pos", -angle_increment),
+                "e": ("elbow_flex.pos", angle_increment),
+                "4": ("gripper.pos", -angle_increment),
+                "r": ("gripper.pos", angle_increment),
+            }
 
-            print("\n" + "-" * (display_len + 10))
-            print(f"{'NAME':<{display_len}} | {'NORM':>7}")
-            # Display the final robot action that was sent
-            for motor, value in robot_action_to_send.items():
-                print(f"{motor:<{display_len}} | {value:>7.2f}")
-            move_cursor_up(len(robot_action_to_send) + 5)
+            if key in key_map:
+                joint_name, increment = key_map[key]
+                if joint_name in robot_action_to_send:
+                    robot_action_to_send[joint_name] += increment
 
-        dt_s = time.perf_counter() - loop_start
-        busy_wait(1 / fps - dt_s)
-        loop_s = time.perf_counter() - loop_start
-        print(f"\ntime: {loop_s * 1e3:.2f}ms ({1 / loop_s:.0f} Hz)")
+            # Send processed action to robot
+            _ = robot.send_action(robot_action_to_send)
 
-        if duration is not None and time.perf_counter() - start >= duration:
-            return
+            # Get robot observation for display
+            obs = robot.get_observation()
+
+            if display_data:
+                # Process robot observation through pipeline
+                obs_transition = robot_observation_processor(obs)
+
+                # log_rerun_data(
+                #     observation=obs_transition,
+                #     action=teleop_action,
+                # )
+
+                print("\n" + "-" * (display_len + 10))
+                print(f"{'NAME':<{display_len}} | {'NORM':>7}")
+                # Display the final robot action that was sent
+                for motor, value in robot_action_to_send.items():
+                    print(f"{motor:<{display_len}} | {value:>7.2f}")
+                move_cursor_up(len(robot_action_to_send) + 5)
+
+            dt_s = time.perf_counter() - loop_start
+            busy_wait(1 / fps - dt_s)
+            loop_s = time.perf_counter() - loop_start
+            # print(f"\ntime: {loop_s * 1e3:.2f}ms ({1 / loop_s:.0f} Hz)")
+
+            if duration is not None and time.perf_counter() - start >= duration:
+                return
+            
+    finally:
+        # Restore terminal settings
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 
 @parser.wrap()
